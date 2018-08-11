@@ -1,0 +1,65 @@
+---
+title: "ML-Final project"
+author: "JOMR"
+date: "8/7/2018"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## Using Machine Learning to classify activities using mobile devices  
+The purpose of this project is to use machine learning to categorize user´s activities.  
+
+```{r reading, cache=TRUE, warning=FALSE}
+library(tidyverse)
+library(caret)
+library(kableExtra)
+#setwd("final project")
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", destfile="training.csv")
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", destfile="test.csv")
+train <-read.csv("training.csv", header=TRUE)
+test <- read.csv("test.csv", header=TRUE)
+```   
+We will first clean up the database; so that only the variables that are present (ie. have no missings) in both databases are used in the prediction and the classification algorhitms.  
+```{r cleaning, cache=TRUE}
+#De-selecting columns that have missing values
+whichcleantraining <- which(apply(train, 2, function(x) sum(is.na(x))) == 0 )
+traincleaned <- train[,whichcleantraining]
+whichcleantesting <- which(apply(test, 2, function(x) sum(is.na(x))) == 0 )
+testcleaned <- test[,whichcleantesting]
+#intersecting names on each db
+names1 <- colnames(testcleaned)
+names2 <- colnames(traincleaned)
+both <- names1[names1 %in% names2]
+#databases with enough variables
+traindb <- dplyr::select(train,c(both,"classe"))
+testdb <- dplyr::select(test,c(both,"problem_id"))
+#finding variables with low variance and unusable variables and eliminating them
+nearZeroVar(traindb) #variable is "new_window"
+traindb <- select(traindb, -c(new_window, X, user_name, cvtd_timestamp, raw_timestamp_part_1, raw_timestamp_part_2, num_window))
+testdb <- select(testdb, -c(new_window, X, user_name, cvtd_timestamp, raw_timestamp_part_1, raw_timestamp_part_2, num_window))
+```   
+## Machine learning  
+I will proceed to build the classification algorithm in the following way:   
+* Build an rpart tree  
+* Build a random forest model  
+* Cross-validate both approaches using k-folds cross-validation  
+* Predict using the best of the two models in the test dataset.   
+```{r ml1, cache=TRUE}
+library(caret)
+#setting cross-validation parameters
+train_control <- trainControl(method="cv", number=10, classProbs = T)
+#Using rpart method to build a classification tree
+rpart1 <- train(classe ~ ., data=traindb, method="rpart", trControl=train_control)
+#using a random forest model
+rforest1 <- train(classe ~., data=traindb, method="rf",trControl=train_control)
+#using k folds cv
+print(rpart1) # expected accuracy 50% (50% out-of-sample error)
+print (rforest1) #expected accuracy close to 99% (1% out-of sample error)
+```  
+Since the out-of-sample error for rforest model has a higher accuracy, I choose the random forest-based prediction for the final submission.  
+The following are the predictions associated with the model and the test db:
+`r predict(rforest1, newdata=testdb)` .  
